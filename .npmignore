@@ -1,0 +1,36 @@
+# OpenFlux uses the package.json "files" allowlist for publishing.
+# This file is kept as an additional safety net for npm packaging.
+
+# Local tooling and VCS
+.git/
+.gitignore
+.npmignore
+.agents/
+.codex/
+
+# Dependencies and local installs
+node_modules/
+client/node_modules/
+
+# Development source and local-only project files
+client/
+prompt.md
+
+# Editor, logs, and temporary files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.swp
+*.swo
+tmp/
+temp/
+coverage/
+.nyc_output/
+dist/
+*.tgz

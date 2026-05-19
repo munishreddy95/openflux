@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --color-app: 9 11 16;
+  --color-panel: 16 21 30;
+  --color-panel-muted: 21 28 40;
+  --color-highlight: 86 215 255;
+  --color-accent: 157 255 143;
+  --color-warning: 247 185 85;
+  --color-danger: 255 109 123;
+  --color-ink: 219 231 255;
+  --color-subtle: 140 160 190;
+  --page-radial-a: 86 215 255;
+  --page-radial-b: 157 255 143;
+  --page-bg-start: 9 11 16;
+  --page-bg-end: 7 9 13;
+  --glow-ring: 86 215 255;
+  --glow-shadow: 5 10 25;
+  --scrollbar-thumb: 140 160 190;
+  --selection-color: 86 215 255;
+  --font-sans: "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Trebuchet MS", "Avenir Next", sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 0% 0%, rgb(var(--page-radial-a) / 0.2), transparent 22%),
+    radial-gradient(circle at 100% 0%, rgb(var(--page-radial-b) / 0.15), transparent 18%),
+    linear-gradient(180deg, rgb(var(--page-bg-start)) 0%, rgb(var(--page-bg-end)) 100%);
+  color: rgb(var(--color-ink));
+  font-family: var(--font-sans);
+  font-size: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgb(var(--selection-color) / 0.25);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--scrollbar-thumb) / 0.35);
+  border-radius: 999px;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.glass-panel {
+  @apply border border-white/10 bg-panel/85 shadow-glow backdrop-blur;
+}
+
+.metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}

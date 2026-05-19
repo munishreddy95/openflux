@@ -1,0 +1,58 @@
+{
+  "name": "openflux",
+  "version": "1.0.0",
+  "description": "Self-hosted, always-on torrent manager for authorized downloads, streaming, and remote access",
+  "type": "module",
+  "bin": {
+    "openflux": "./bin/openflux.js"
+  },
+  "scripts": {
+    "dev": "node server/server.js",
+    "client:install": "cd client && npm install",
+    "client:dev": "cd client && npm run dev",
+    "client:build": "cd client && npm run build",
+    "build": "npm run client:build",
+    "start": "node server/server.js"
+  },
+  "files": [
+    "bin",
+    "server",
+    "public",
+    "README.md",
+    "CONTRIBUTING.md",
+    "LEGAL_NOTICE.md",
+    "SECURITY.md",
+    "TROUBLESHOOTING.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "keywords": [
+    "torrent",
+    "webtorrent",
+    "express",
+    "react",
+    "download-manager",
+    "media-library",
+    "streaming",
+    "self-hosted",
+    "vps"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^8.0.0",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
+    "express": "^5.1.0",
+    "fs-extra": "^11.3.2",
+    "lowdb": "^7.0.1",
+    "mime-types": "^3.0.1",
+    "multer": "^2.0.2",
+    "nanoid": "^5.1.5",
+    "parse-torrent": "^11.0.19",
+    "socket.io": "^4.8.1",
+    "webtorrent": "^2.8.4"
+  }
+}
