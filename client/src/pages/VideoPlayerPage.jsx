@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Keyboard } from 'lucide-react';
 import Button from '../components/common/Button.jsx';
+import { VideoPlayerSkeleton } from '../components/skeletons/PageSkeletons.jsx';
 import VideoPlayer from '../components/player/VideoPlayer.jsx';
 import {
   fetchMediaFiles,
@@ -141,7 +142,7 @@ export default function VideoPlayerPage() {
   }
 
   if (loading && !file) {
-    return <div className="glass-panel rounded-[30px] p-8 text-sm text-subtle">Loading media file...</div>;
+    return <VideoPlayerSkeleton />;
   }
 
   if (!file) {

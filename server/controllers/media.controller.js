@@ -10,9 +10,9 @@ import {
   uploadMediaSubtitle
 } from '../services/media.service.js';
 
-export async function getMediaLibrary(_request, response, next) {
+export async function getMediaLibrary(request, response, next) {
   try {
-    const media = await listMedia();
+    const media = await listMedia({ user: request.user });
     response.json({ success: true, data: media });
   } catch (error) {
     next(error);
@@ -21,7 +21,7 @@ export async function getMediaLibrary(_request, response, next) {
 
 export async function getMediaFiles(request, response, next) {
   try {
-    const files = await getTorrentMediaFiles(request.params.torrentId);
+    const files = await getTorrentMediaFiles(request.params.torrentId, { user: request.user });
     response.json({ success: true, data: files });
   } catch (error) {
     next(error);
@@ -30,7 +30,7 @@ export async function getMediaFiles(request, response, next) {
 
 export async function getMediaSubtitles(request, response, next) {
   try {
-    const subtitles = await getMediaSubtitleTracks(request.params.torrentId, request.params.fileId);
+    const subtitles = await getMediaSubtitleTracks(request.params.torrentId, request.params.fileId, { user: request.user });
     response.json({ success: true, data: subtitles });
   } catch (error) {
     next(error);
@@ -39,7 +39,9 @@ export async function getMediaSubtitles(request, response, next) {
 
 export async function streamMediaFile(request, response, next) {
   try {
-    const { file, absolutePath } = await getMediaFile(request.params.torrentId, request.params.fileId);
+    const { file, absolutePath } = await getMediaFile(request.params.torrentId, request.params.fileId, {
+      user: request.user
+    });
 
     if (!file.isVideo) {
       response.status(400).json({
@@ -96,7 +98,8 @@ export async function streamMediaSubtitle(request, response, next) {
     const { subtitle, content } = await getMediaSubtitleTrack(
       request.params.torrentId,
       request.params.fileId,
-      request.params.subtitleId
+      request.params.subtitleId,
+      { user: request.user }
     );
 
     response.setHeader(
@@ -112,7 +115,9 @@ export async function streamMediaSubtitle(request, response, next) {
 
 export async function downloadMediaFile(request, response, next) {
   try {
-    const { file, absolutePath } = await getMediaFile(request.params.torrentId, request.params.fileId);
+    const { file, absolutePath } = await getMediaFile(request.params.torrentId, request.params.fileId, {
+      user: request.user
+    });
     response.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
     response.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
     fs.createReadStream(absolutePath).pipe(response);
@@ -131,7 +136,9 @@ export async function createMediaSubtitle(request, response, next) {
       return;
     }
 
-    const subtitleData = await uploadMediaSubtitle(request.params.torrentId, request.params.fileId, request.file);
+    const subtitleData = await uploadMediaSubtitle(request.params.torrentId, request.params.fileId, request.file, {
+      user: request.user
+    });
     response.status(201).json({ success: true, data: subtitleData });
   } catch (error) {
     next(error);
@@ -140,7 +147,11 @@ export async function createMediaSubtitle(request, response, next) {
 
 export async function downloadMediaDirectory(request, response, next) {
   try {
-    const { archiveName, files } = await getMediaDirectoryArchive(request.params.torrentId, request.query.path);
+    const { archiveName, files } = await getMediaDirectoryArchive(
+      request.params.torrentId,
+      request.query.path,
+      { user: request.user }
+    );
     const archive = new ZipArchive({
       zlib: { level: 9 }
     });

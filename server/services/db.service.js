@@ -5,7 +5,9 @@ import { JSONFile } from 'lowdb/node';
 const defaultData = {
   torrents: [],
   settings: {},
-  media: []
+  media: [],
+  users: [],
+  sessions: []
 };
 
 let db = null;
@@ -47,6 +49,16 @@ export async function initializeDb(dbPath) {
     requiresWrite = true;
   }
 
+  if (!Array.isArray(db.data.users)) {
+    db.data.users = [];
+    requiresWrite = true;
+  }
+
+  if (!Array.isArray(db.data.sessions)) {
+    db.data.sessions = [];
+    requiresWrite = true;
+  }
+
   if (requiresWrite) {
     await db.write();
   }
@@ -69,6 +81,8 @@ export async function refreshDb() {
   database.data.torrents ||= [];
   database.data.settings ||= {};
   database.data.media ||= [];
+  database.data.users ||= [];
+  database.data.sessions ||= [];
   return database;
 }
 

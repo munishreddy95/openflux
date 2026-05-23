@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Header from './Header.jsx';
 import DesignSettingsPanel from './DesignSettingsPanel.jsx';
-import { NAV_ITEMS } from '../../utils/constants.js';
+import { getNavItems } from '../../utils/constants.js';
 
 function mobileClass({ isActive }) {
   return [
@@ -11,13 +11,15 @@ function mobileClass({ isActive }) {
   ].join(' ');
 }
 
-export default function AppLayout({ connectionStatus }) {
+export default function AppLayout({ connectionStatus, currentUser, onLogout }) {
+  const navItems = getNavItems(currentUser);
+
   return (
     <div className="app-shell px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1600px] gap-6">
-        <Sidebar />
+        <Sidebar currentUser={currentUser} />
         <div className="flex min-w-0 flex-1 flex-col gap-4 pb-24 lg:pb-6">
-          <Header connectionStatus={connectionStatus} />
+          <Header connectionStatus={connectionStatus} currentUser={currentUser} onLogout={onLogout} />
           <main className="flex-1">
             <Outlet />
           </main>
@@ -27,7 +29,7 @@ export default function AppLayout({ connectionStatus }) {
       <DesignSettingsPanel />
 
       <nav className="glass-panel fixed bottom-4 left-4 right-4 z-30 mx-auto flex max-w-xl rounded-[28px] p-2 lg:hidden">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink key={item.to} to={item.to} className={mobileClass}>

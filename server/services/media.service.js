@@ -18,6 +18,18 @@ function createHttpError(message, statusCode = 400) {
   return error;
 }
 
+function isAdminUser(user) {
+  return user?.role === 'admin';
+}
+
+function canAccessTorrentRecord(torrent, user) {
+  if (!torrent || !user) {
+    return false;
+  }
+
+  return isAdminUser(user) || (torrent.ownerUserId && torrent.ownerUserId === user.id);
+}
+
 function getNormalizedTorrentFiles(torrent) {
   return (torrent.files || []).map((file) => normalizeStoredFileRecord(file, {
     torrentStatus: torrent?.status
@@ -111,12 +123,12 @@ function ensureVideoFileSupportsSubtitles(file) {
   }
 }
 
-async function getTorrentById(torrentId) {
+async function getTorrentById(torrentId, { user } = {}) {
   const database = getDb();
   await database.read();
   const torrent = database.data.torrents.find((item) => item.id === torrentId);
 
-  if (!torrent) {
+  if (!torrent || (user && !canAccessTorrentRecord(torrent, user))) {
     throw createHttpError('Torrent not found', 404);
   }
 
@@ -269,19 +281,21 @@ export async function syncMediaLibrary() {
   return media;
 }
 
-export async function listMedia() {
+export async function listMedia({ user } = {}) {
   const database = getDb();
   await database.read();
-  return buildMediaLibraryEntries(database.data.torrents);
+  return buildMediaLibraryEntries(
+    database.data.torrents.filter((torrent) => !user || canAccessTorrentRecord(torrent, user))
+  );
 }
 
-export async function getTorrentMediaFiles(torrentId) {
-  const torrent = await getTorrentById(torrentId);
+export async function getTorrentMediaFiles(torrentId, { user } = {}) {
+  const torrent = await getTorrentById(torrentId, { user });
   return getAvailableTorrentFiles(torrent);
 }
 
-export async function getMediaFile(torrentId, fileId) {
-  const torrent = await getTorrentById(torrentId);
+export async function getMediaFile(torrentId, fileId, { user } = {}) {
+  const torrent = await getTorrentById(torrentId, { user });
   const file = getAvailableTorrentFiles(torrent).find((item) => item.id === fileId);
 
   if (!file) {
@@ -303,14 +317,14 @@ export async function getMediaFile(torrentId, fileId) {
   };
 }
 
-export async function getMediaSubtitleTracks(torrentId, fileId) {
-  const { torrent, file, absolutePath } = await getMediaFile(torrentId, fileId);
+export async function getMediaSubtitleTracks(torrentId, fileId, { user } = {}) {
+  const { torrent, file, absolutePath } = await getMediaFile(torrentId, fileId, { user });
   return buildSubtitleTrackList(torrent, file, absolutePath);
 }
 
-export async function getMediaSubtitleTrack(torrentId, fileId, subtitleId) {
+export async function getMediaSubtitleTrack(torrentId, fileId, subtitleId, { user } = {}) {
   const { downloadDir } = getConfig();
-  const subtitleTracks = await getMediaSubtitleTracks(torrentId, fileId);
+  const subtitleTracks = await getMediaSubtitleTracks(torrentId, fileId, { user });
   const subtitle = subtitleTracks.find((track) => track.id === subtitleId);
 
   if (!subtitle) {
@@ -330,12 +344,12 @@ export async function getMediaSubtitleTrack(torrentId, fileId, subtitleId) {
   };
 }
 
-export async function uploadMediaSubtitle(torrentId, fileId, uploadedFile) {
+export async function uploadMediaSubtitle(torrentId, fileId, uploadedFile, { user } = {}) {
   if (!uploadedFile?.path) {
     throw createHttpError('A subtitle file is required', 400);
   }
 
-  const { torrent, file, absolutePath } = await getMediaFile(torrentId, fileId);
+  const { torrent, file, absolutePath } = await getMediaFile(torrentId, fileId, { user });
   ensureVideoFileSupportsSubtitles(file);
 
   if (!isSubtitleFile(uploadedFile.originalname)) {
@@ -382,8 +396,8 @@ export async function uploadMediaSubtitle(torrentId, fileId, uploadedFile) {
   };
 }
 
-export async function getMediaDirectoryArchive(torrentId, directoryPath = '') {
-  const torrent = await getTorrentById(torrentId);
+export async function getMediaDirectoryArchive(torrentId, directoryPath = '', { user } = {}) {
+  const torrent = await getTorrentById(torrentId, { user });
   const safeDirectoryPath = normalizeDirectoryPath(directoryPath);
   const pathPrefix = safeDirectoryPath ? `${safeDirectoryPath}/` : '';
   const matchingFiles = getAvailableTorrentFiles(torrent).filter((file) =>

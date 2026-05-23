@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { NAV_ITEMS } from '../../utils/constants.js';
+import { getNavItems } from '../../utils/constants.js';
 
 function navClass({ isActive }) {
   return [
@@ -10,7 +10,9 @@ function navClass({ isActive }) {
   ].join(' ');
 }
 
-export default function Sidebar() {
+export default function Sidebar({ currentUser }) {
+  const navItems = getNavItems(currentUser);
+
   return (
     <aside className="glass-panel sticky top-4 hidden h-[calc(100vh-2rem)] w-72 shrink-0 flex-col self-start overflow-y-auto rounded-[32px] p-6 lg:flex">
       <div>
@@ -22,7 +24,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="mt-10 space-y-2">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink key={item.to} to={item.to} className={navClass}>
@@ -33,11 +35,26 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto rounded-[26px] border border-accent/15 bg-accent/8 p-5">
-        <p className="text-xs uppercase tracking-[0.22em] text-accent/80">Legal use only</p>
-        <p className="mt-3 text-sm leading-6 text-subtle">
-          OpenFlux intentionally excludes search, scraping, and piracy shortcuts. Bring your own magnet links and torrent files.
-        </p>
+      <div className="mt-auto space-y-4">
+        <div className="rounded-[26px] border border-white/10 bg-white/5 p-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-highlight/80">Signed in</p>
+          <p className="mt-3 break-words text-base font-medium text-white">{currentUser?.username}</p>
+          <p className="mt-1 text-sm text-subtle">
+            {currentUser?.role === 'admin' ? 'Administrator' : 'User'} account
+          </p>
+          {currentUser?.mustChangePassword ? (
+            <p className="mt-3 text-sm leading-6 text-warning">
+              Password update required before the rest of the app is unlocked.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="rounded-[26px] border border-accent/15 bg-accent/8 p-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-accent/80">Legal use only</p>
+          <p className="mt-3 text-sm leading-6 text-subtle">
+            OpenFlux intentionally excludes search, scraping, and piracy shortcuts. Bring your own magnet links and torrent files.
+          </p>
+        </div>
       </div>
     </aside>
   );

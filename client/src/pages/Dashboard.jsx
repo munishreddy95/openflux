@@ -1,5 +1,6 @@
 import { CircleAlert, LibraryBig, PackagePlus } from 'lucide-react';
 import EmptyState from '../components/common/EmptyState.jsx';
+import { DashboardSkeleton } from '../components/skeletons/PageSkeletons.jsx';
 import TorrentCard from '../components/torrent/TorrentCard.jsx';
 import { useTorrentStore } from '../store/torrent.store.js';
 
@@ -12,18 +13,23 @@ function SummaryCard({ label, value, tone }) {
   };
 
   return (
-    <div className="glass-panel rounded-[26px] p-5">
+    <div className="glass-panel rounded-[24px] p-4 sm:p-4.5">
       <p className="text-xs uppercase tracking-[0.22em] text-subtle">{label}</p>
-      <p className={['mt-3 text-4xl font-semibold', tones[tone] || tones.default].join(' ')}>{value}</p>
+      <p className={['mt-2 text-3xl font-semibold sm:text-[2rem]', tones[tone] || tones.default].join(' ')}>{value}</p>
     </div>
   );
 }
 
 export default function Dashboard() {
   const torrents = useTorrentStore((state) => state.torrents);
+  const loading = useTorrentStore((state) => state.loading);
   const active = torrents.filter((torrent) => ['downloading', 'checking', 'queued'].includes(torrent.status));
   const completed = torrents.filter((torrent) => torrent.status === 'completed');
   const attention = torrents.filter((torrent) => ['failed', 'needs_resume', 'paused', 'stopped'].includes(torrent.status));
+
+  if (loading && torrents.length === 0) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="space-y-6">
@@ -49,7 +55,7 @@ export default function Dashboard() {
             <h3 className="font-display text-2xl font-semibold text-white">In progress</h3>
             <span className="text-sm text-subtle">{active.length} active or queued</span>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {active.map((torrent) => (
               <TorrentCard key={torrent.id} torrent={torrent} />
             ))}
@@ -63,7 +69,7 @@ export default function Dashboard() {
             <CircleAlert className="h-5 w-5 text-warning" />
             <h3 className="font-display text-2xl font-semibold text-white">Needs attention</h3>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {attention.map((torrent) => (
               <TorrentCard key={torrent.id} torrent={torrent} />
             ))}
@@ -77,7 +83,7 @@ export default function Dashboard() {
             <LibraryBig className="h-5 w-5 text-highlight" />
             <h3 className="font-display text-2xl font-semibold text-white">Completed</h3>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {completed.map((torrent) => (
               <TorrentCard key={torrent.id} torrent={torrent} />
             ))}

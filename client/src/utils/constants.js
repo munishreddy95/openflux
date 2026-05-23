@@ -4,16 +4,35 @@ import {
   Download,
   LayoutDashboard,
   PlusSquare,
-  Settings
+  Settings,
+  UserRound
 } from 'lucide-react';
 
-export const NAV_ITEMS = [
+const baseNavItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/add', label: 'Add Torrent', icon: PlusSquare },
   { to: '/media', label: 'Media', icon: Clapperboard },
+  { to: '/account', label: 'Account', icon: UserRound }
+];
+
+const adminNavItems = [
   { to: '/system', label: 'System Usage', icon: Cpu },
   { to: '/settings', label: 'Settings', icon: Settings }
 ];
+
+export function getNavItems(user) {
+  if (!user) {
+    return [];
+  }
+
+  if (user.mustChangePassword) {
+    return baseNavItems.filter((item) => item.to === '/account');
+  }
+
+  return user.role === 'admin'
+    ? [...baseNavItems, ...adminNavItems]
+    : baseNavItems;
+}
 
 export const STATUS_STYLES = {
   downloading: 'bg-highlight/15 text-highlight ring-1 ring-highlight/30',

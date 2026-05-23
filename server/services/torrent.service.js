@@ -34,6 +34,31 @@ function createHttpError(message, statusCode) {
   return error;
 }
 
+function isAdminUser(user) {
+  return user?.role === 'admin';
+}
+
+function canAccessTorrentRecord(record, user) {
+  if (!record || !user) {
+    return false;
+  }
+
+  return isAdminUser(user) || (record.ownerUserId && record.ownerUserId === user.id);
+}
+
+function assertTorrentAccess(record, user) {
+  if (!canAccessTorrentRecord(record, user)) {
+    throw createHttpError('Torrent not found', 404);
+  }
+}
+
+function buildSocketEventScope(record) {
+  return {
+    ownerUserId: record?.ownerUserId || null,
+    includeAdmins: true
+  };
+}
+
 function getTimestampValue(value) {
   if (!value) {
     return null;
@@ -412,12 +437,14 @@ function getActiveCount() {
   return activeTorrents.size;
 }
 
-function createEmptyTorrentRecord({ sourceType, magnetURI = null, torrentFile = null, status }) {
+function createEmptyTorrentRecord({ sourceType, magnetURI = null, torrentFile = null, status, ownerUser = null }) {
   return {
     id: nanoid(),
     name: sourceType === 'magnet' ? 'Fetching metadata...' : torrentFile?.originalname || 'Uploaded torrent',
     sourceType,
     magnetURI,
+    ownerUserId: ownerUser?.id || null,
+    ownerUsername: ownerUser?.username || null,
     infoHash: null,
     torrentFileName: torrentFile?.filename || null,
     status,
@@ -519,7 +546,7 @@ async function syncTorrentSnapshot(recordId, torrent, nextStatus) {
       activeRecord.lastSnapshot = nextRecord;
     }
 
-    emitSocketEvent('torrent:progress', { success: true, data: nextRecord });
+    emitSocketEvent('torrent:progress', { success: true, data: nextRecord }, buildSocketEventScope(nextRecord));
     return nextRecord;
   } finally {
     if (activeRecord) {
@@ -591,7 +618,7 @@ async function finalizeTorrent(recordId, torrent) {
   );
 
   await syncMediaLibrary();
-  emitSocketEvent('torrent:completed', { success: true, data: nextRecord });
+  emitSocketEvent('torrent:completed', { success: true, data: nextRecord }, buildSocketEventScope(nextRecord));
 
   if (getConfig().autoDeleteCompleted) {
     await deleteTorrent(nextRecord.id, false);
@@ -626,7 +653,7 @@ async function registerLiveTorrent(recordId, torrent, resumeEventName) {
       const record = await syncTorrentSnapshot(recordId, torrent, 'downloading');
       await rebuildTorrentSelectionFromRecord(record, torrent);
       const updatedRecord = await syncTorrentSnapshot(recordId, torrent, 'downloading');
-      emitSocketEvent(resumeEventName, { success: true, data: updatedRecord });
+      emitSocketEvent(resumeEventName, { success: true, data: updatedRecord }, buildSocketEventScope(updatedRecord));
     } catch (error) {
       await failTorrent(recordId, error);
     }
@@ -657,7 +684,7 @@ async function failTorrent(recordId, error) {
     success: false,
     data: nextRecord,
     message: error.message
-  });
+  }, buildSocketEventScope(nextRecord));
 
   await startQueuedTorrentsIfPossible();
 }
@@ -671,7 +698,7 @@ async function startTorrentRecord(record, eventName = 'torrent:added') {
       ...getEmptyPeerConnectionState(),
       ...stopActiveTime(record)
     });
-    emitSocketEvent(eventName, { success: true, data: queuedRecord });
+    emitSocketEvent(eventName, { success: true, data: queuedRecord }, buildSocketEventScope(queuedRecord));
     return queuedRecord;
   }
 
@@ -687,7 +714,7 @@ async function startTorrentRecord(record, eventName = 'torrent:added') {
     ...startActiveTime(record)
   });
 
-  emitSocketEvent(eventName, { success: true, data: checkingRecord });
+  emitSocketEvent(eventName, { success: true, data: checkingRecord }, buildSocketEventScope(checkingRecord));
   return checkingRecord;
 }
 
@@ -749,7 +776,11 @@ async function getRecordInfoHash(record) {
   return null;
 }
 
-function buildDuplicateMessage(record) {
+function buildDuplicateMessage(record, user = null) {
+  if (!canAccessTorrentRecord(record, user) && !isAdminUser(user)) {
+    return 'This torrent already exists in OpenFlux.';
+  }
+
   const torrentName = record.name || 'Unknown torrent';
   return `This torrent already exists in OpenFlux as "${torrentName}" with status "${record.status}".`;
 }
@@ -775,35 +806,41 @@ async function findDuplicateTorrent({ infoHash, magnetURI = null }) {
   return null;
 }
 
-export async function listTorrents() {
+export async function listTorrents({ user } = {}) {
   const database = getDb();
   await database.read();
   return database.data.torrents
     .slice()
+    .filter((torrent) => !user || canAccessTorrentRecord(torrent, user))
     .map((torrent) => decorateTorrentRecord(torrent))
     .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }
 
-export async function getTorrentById(id) {
+export async function getTorrentById(id, { user } = {}) {
   const torrent = await readTorrentRecord(id);
   if (!torrent) {
-    throw new Error('Torrent not found');
+    throw createHttpError('Torrent not found', 404);
+  }
+
+  if (user) {
+    assertTorrentAccess(torrent, user);
   }
 
   return torrent;
 }
 
-export async function addMagnetTorrent(magnetURI) {
+export async function addMagnetTorrent(magnetURI, { user } = {}) {
   const infoHash = await getMagnetInfoHash(magnetURI);
   const duplicateRecord = await findDuplicateTorrent({ infoHash, magnetURI });
   if (duplicateRecord) {
-    throw createHttpError(buildDuplicateMessage(duplicateRecord), 409);
+    throw createHttpError(buildDuplicateMessage(duplicateRecord, user), 409);
   }
 
   const record = createEmptyTorrentRecord({
     sourceType: 'magnet',
     magnetURI,
-    status: 'queued'
+    status: 'queued',
+    ownerUser: user
   });
   record.infoHash = infoHash;
 
@@ -814,7 +851,7 @@ export async function addMagnetTorrent(magnetURI) {
   return startTorrentRecord(record);
 }
 
-export async function addTorrentFile(torrentFile) {
+export async function addTorrentFile(torrentFile, { user } = {}) {
   let infoHash;
 
   try {
@@ -829,13 +866,14 @@ export async function addTorrentFile(torrentFile) {
   const duplicateRecord = await findDuplicateTorrent({ infoHash });
   if (duplicateRecord) {
     await cleanupUploadedTorrentFile(torrentFile);
-    throw createHttpError(buildDuplicateMessage(duplicateRecord), 409);
+    throw createHttpError(buildDuplicateMessage(duplicateRecord, user), 409);
   }
 
   const record = createEmptyTorrentRecord({
     sourceType: 'file',
     torrentFile,
-    status: 'queued'
+    status: 'queued',
+    ownerUser: user
   });
   record.infoHash = infoHash;
 
@@ -846,11 +884,12 @@ export async function addTorrentFile(torrentFile) {
   return startTorrentRecord(record);
 }
 
-export async function updateTorrentFilePreferences(torrentId, fileId, preferences = {}) {
+export async function updateTorrentFilePreferences(torrentId, fileId, preferences = {}, { user } = {}) {
+  const currentRecord = await getTorrentById(torrentId, { user });
   const activeRecord = activeTorrents.get(torrentId);
 
   let nextRecord = await persistTorrents((torrents) => {
-    const torrent = torrents.find((item) => item.id === torrentId);
+    const torrent = torrents.find((item) => item.id === currentRecord.id);
     if (!torrent) {
       throw new Error('Torrent not found');
     }
@@ -893,13 +932,13 @@ export async function updateTorrentFilePreferences(torrentId, fileId, preference
   );
 
   await maybeSyncMediaLibrary(previousRecord, nextRecord);
-  emitSocketEvent('torrent:progress', { success: true, data: nextRecord });
+  emitSocketEvent('torrent:progress', { success: true, data: nextRecord }, buildSocketEventScope(nextRecord));
 
   return nextRecord;
 }
 
-export async function pauseTorrent(id) {
-  const record = await getTorrentById(id);
+export async function pauseTorrent(id, { user } = {}) {
+  const record = await getTorrentById(id, { user });
   const activeRecord = activeTorrents.get(id);
 
   if (activeRecord) {
@@ -916,13 +955,13 @@ export async function pauseTorrent(id) {
     ...stopActiveTime(record)
   });
 
-  emitSocketEvent('torrent:paused', { success: true, data: nextRecord });
+  emitSocketEvent('torrent:paused', { success: true, data: nextRecord }, buildSocketEventScope(nextRecord));
   await startQueuedTorrentsIfPossible();
   return nextRecord;
 }
 
-export async function resumeTorrent(id) {
-  const record = await getTorrentById(id);
+export async function resumeTorrent(id, { user } = {}) {
+  const record = await getTorrentById(id, { user });
 
   if (activeTorrents.has(id)) {
     return record;
@@ -938,8 +977,8 @@ export async function resumeTorrent(id) {
   return startTorrentRecord(nextRecord, 'torrent:resumed');
 }
 
-export async function deleteTorrent(id, deleteFiles = false) {
-  const record = await getTorrentById(id);
+export async function deleteTorrent(id, deleteFiles = false, { user } = {}) {
+  const record = await getTorrentById(id, { user });
   const activeRecord = activeTorrents.get(id);
 
   if (activeRecord) {
@@ -959,7 +998,7 @@ export async function deleteTorrent(id, deleteFiles = false) {
   });
 
   await syncMediaLibrary();
-  emitSocketEvent('torrent:deleted', { success: true, data: { id } });
+  emitSocketEvent('torrent:deleted', { success: true, data: { id } }, buildSocketEventScope(record));
   await startQueuedTorrentsIfPossible();
 
   if (record.torrentFileName) {

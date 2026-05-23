@@ -4,6 +4,7 @@ import { Download, Eye, Search, Tv2 } from 'lucide-react';
 import Button from '../components/common/Button.jsx';
 import EmptyState from '../components/common/EmptyState.jsx';
 import Input from '../components/common/Input.jsx';
+import { MediaLibrarySkeleton } from '../components/skeletons/PageSkeletons.jsx';
 import MediaBrowser from '../components/media/MediaBrowser.jsx';
 import { fetchMediaLibrary } from '../services/media.api.js';
 import { getDownloadUrl } from '../services/media.api.js';
@@ -93,7 +94,7 @@ export default function MediaLibrary() {
       {error ? <p className="text-sm text-danger">{error}</p> : null}
 
       {mediaLoading && media.length === 0 ? (
-        <div className="glass-panel rounded-[30px] p-8 text-sm text-subtle">Loading media library...</div>
+        <MediaLibrarySkeleton />
       ) : null}
 
       {!mediaLoading && filteredMedia.length === 0 ? (

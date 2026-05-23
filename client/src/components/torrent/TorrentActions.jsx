@@ -70,29 +70,29 @@ export default function TorrentActions({ torrent, className }) {
 
   return (
     <>
-      <div className={['space-y-3', className].filter(Boolean).join(' ')}>
-        <div className="flex flex-wrap gap-2">
+      <div className={['space-y-2', className].filter(Boolean).join(' ')}>
+        <div className="flex flex-wrap gap-1.5">
           {canPause ? (
-            <Button variant="secondary" size="sm" onClick={handlePause} disabled={busyAction !== null}>
+            <Button variant="secondary" size="sm" className="px-2.5 sm:px-3" onClick={handlePause} disabled={busyAction !== null}>
               <Pause className="h-4 w-4" />
               Pause
             </Button>
           ) : null}
 
           {canResume ? (
-            <Button variant="secondary" size="sm" onClick={handleResume} disabled={busyAction !== null}>
+            <Button variant="secondary" size="sm" className="px-2.5 sm:px-3" onClick={handleResume} disabled={busyAction !== null}>
               <Play className="h-4 w-4" />
               Resume
             </Button>
           ) : null}
 
-          <Button as={Link} to={`/torrents/${torrent.id}`} variant="ghost" size="sm">
+          <Button as={Link} to={`/torrents/${torrent.id}`} variant="ghost" size="sm" className="px-2.5 sm:px-3">
             <Waypoints className="h-4 w-4" />
             Details
           </Button>
 
           {firstVideoFile ? (
-            <Button as={Link} to={`/media/${torrent.id}/${firstVideoFile.id}`} variant="ghost" size="sm">
+            <Button as={Link} to={`/media/${torrent.id}/${firstVideoFile.id}`} variant="ghost" size="sm" className="px-2.5 sm:px-3">
               <Tv className="h-4 w-4" />
               Watch
             </Button>
@@ -104,13 +104,14 @@ export default function TorrentActions({ torrent, className }) {
               href={`/api/media/${torrent.id}/files/${firstFile.id}/download`}
               variant="ghost"
               size="sm"
+              className="px-2.5 sm:px-3"
             >
               <Download className="h-4 w-4" />
               Download
             </Button>
           ) : null}
 
-          <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)} disabled={busyAction !== null}>
+          <Button variant="danger" size="sm" className="px-2.5 sm:px-3" onClick={() => setDeleteOpen(true)} disabled={busyAction !== null}>
             <Trash2 className="h-4 w-4" />
             Delete
           </Button>

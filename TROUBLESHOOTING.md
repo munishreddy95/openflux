@@ -1,5 +1,41 @@
 # Troubleshooting
 
+## No Admin Account Exists Yet
+
+If the login screen says no admin account exists yet, create one from the server terminal:
+
+```bash
+openflux admin create --username admin --password <strong-password>
+```
+
+Then reload the login page and sign in with that account.
+
+## Password Change Required Before Continuing
+
+If a user signs in with a temporary password, OpenFlux locks the rest of the application until the password is changed.
+
+Expected behavior:
+
+- the user can reach only the `Account` page
+- the header shows `Password update required`
+- torrent, media, system, and settings routes stay blocked until the password change succeeds
+
+This is normal and is part of the recovery flow.
+
+## User Forgot Password
+
+OpenFlux does not provide email recovery.
+
+Recovery flow:
+
+1. sign in as an admin
+2. open `Settings`
+3. find the user account
+4. click `Issue temp password`
+5. give the shown temporary password to the user
+
+After the user signs in with that password, OpenFlux forces an immediate password change.
+
 ## Socket.IO Behind HTTPS
 
 If the UI loads over HTTPS but live updates do not connect:
@@ -103,3 +139,38 @@ If you are debugging a production issue:
 1. test with `--cores 1`
 2. confirm the issue disappears or remains
 3. re-enable multi-core after isolating whether the problem is runtime routing or general application behavior
+
+## Detached Background Mode
+
+If you start OpenFlux with:
+
+```bash
+openflux start --detach
+```
+
+Then check:
+
+- pid file: `~/.openflux/openflux.pid`
+- stdout log: `~/.openflux/logs/openflux.out.log`
+- stderr log: `~/.openflux/logs/openflux.err.log`
+
+Useful commands:
+
+```bash
+openflux status
+openflux stop
+openflux stop --force
+```
+
+If `status` says OpenFlux is not running but a previous detached start was attempted, inspect the stderr log for the startup failure.
+
+## Requested Port Already In Use
+
+If the configured startup port is already occupied, OpenFlux now tries the next available port automatically.
+
+Expected behavior:
+
+- startup logs print a warning such as:
+  `Port 4001 is already in use. OpenFlux is using 4002 instead.`
+- the dashboard URL shown after startup reflects the actual port
+- detached mode stores the resolved bind info so `openflux status` reports the active URL

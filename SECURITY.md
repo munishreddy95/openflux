@@ -4,6 +4,7 @@
 
 OpenFlux is self-hosted software. Security work should prioritize:
 
+- Authentication and session handling
 - Path traversal protection
 - Upload validation
 - Reverse-proxy deployment safety
@@ -34,10 +35,33 @@ Recommended production controls:
 - HTTPS
 - Reverse proxy
 - Authentication
+- Private admin account management
 - Firewall restrictions
 - Storage limits
 - Process monitoring
 
+## Current Security Controls
+
+The current authentication model includes:
+
+- Password hashing before storage
+- Session cookies marked `HttpOnly`
+- `SameSite=Strict` session cookies
+- Admin-only access to system usage, settings, and user creation
+- User ownership scoping for torrents and completed media
+- Temporary password issuance for user recovery
+- Forced password change after temporary-password login
+
 ## Current Limitations
 
-At the current stage, OpenFlux should be treated as self-hosted software that still benefits from operator hardening. If you run it publicly, you are responsible for the surrounding access controls and infrastructure policy.
+OpenFlux still depends on operator hardening around the application.
+
+Current limitations include:
+
+- No multi-factor authentication
+- No email-based password recovery
+- No external identity provider integration
+- No built-in rate limiting yet
+- No account lockout policy yet
+
+If you run it publicly, you are still responsible for the surrounding access controls and infrastructure policy.

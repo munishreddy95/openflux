@@ -10,6 +10,7 @@ export const RUNTIME_ROLE = {
 
 const ROLE_ENV_KEY = 'OPENFLUX_RUNTIME_ROLE';
 const CONTROL_PORT_ENV_KEY = 'OPENFLUX_CONTROL_PORT';
+const PUBLIC_PORT_ENV_KEY = 'OPENFLUX_PUBLIC_PORT';
 const REPORT_INTERVAL_MS = 1000;
 const SNAPSHOT_TIMEOUT_MS = 2000;
 const SUPERVISOR_MESSAGE = {
@@ -56,6 +57,10 @@ export function getControlPortEnvKey() {
   return CONTROL_PORT_ENV_KEY;
 }
 
+export function getPublicPortEnvKey() {
+  return PUBLIC_PORT_ENV_KEY;
+}
+
 export function getRuntimeRole() {
   return process.env[ROLE_ENV_KEY] || RUNTIME_ROLE.single;
 }
@@ -80,6 +85,11 @@ export function isMultiCoreRuntimeEnabled(_config = null) {
 export function getControlPort() {
   const controlPort = Number.parseInt(process.env[CONTROL_PORT_ENV_KEY] || '', 10);
   return Number.isInteger(controlPort) && controlPort > 0 ? controlPort : null;
+}
+
+export function getPublicPort() {
+  const publicPort = Number.parseInt(process.env[PUBLIC_PORT_ENV_KEY] || '', 10);
+  return Number.isInteger(publicPort) && publicPort > 0 ? publicPort : null;
 }
 
 function roundUsage(value, max = 999.9) {

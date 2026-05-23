@@ -3,7 +3,7 @@ import { isValidFilePriority, isValidMagnetURI, normaliseFilePriority, toBoolean
 
 export async function listAllTorrents(_request, response, next) {
   try {
-    const torrents = await listTorrents();
+    const torrents = await listTorrents({ user: _request.user });
     response.json({ success: true, data: torrents });
   } catch (error) {
     next(error);
@@ -12,7 +12,7 @@ export async function listAllTorrents(_request, response, next) {
 
 export async function getTorrentDetails(request, response, next) {
   try {
-    const torrent = await getTorrentById(request.params.id);
+    const torrent = await getTorrentById(request.params.id, { user: request.user });
     response.json({ success: true, data: torrent });
   } catch (error) {
     next(error);
@@ -30,7 +30,7 @@ export async function createMagnetTorrent(request, response, next) {
       return;
     }
 
-    const torrent = await addMagnetTorrent(magnetURI);
+    const torrent = await addMagnetTorrent(magnetURI, { user: request.user });
     response.status(201).json({ success: true, data: torrent });
   } catch (error) {
     next(error);
@@ -47,7 +47,7 @@ export async function createTorrentFromFile(request, response, next) {
       return;
     }
 
-    const torrent = await addTorrentFile(request.file);
+    const torrent = await addTorrentFile(request.file, { user: request.user });
     response.status(201).json({ success: true, data: torrent });
   } catch (error) {
     next(error);
@@ -56,7 +56,7 @@ export async function createTorrentFromFile(request, response, next) {
 
 export async function pauseTorrentDownload(request, response, next) {
   try {
-    const torrent = await pauseTorrent(request.params.id);
+    const torrent = await pauseTorrent(request.params.id, { user: request.user });
     response.json({ success: true, data: torrent });
   } catch (error) {
     next(error);
@@ -65,7 +65,7 @@ export async function pauseTorrentDownload(request, response, next) {
 
 export async function resumeTorrentDownload(request, response, next) {
   try {
-    const torrent = await resumeTorrent(request.params.id);
+    const torrent = await resumeTorrent(request.params.id, { user: request.user });
     response.json({ success: true, data: torrent });
   } catch (error) {
     next(error);
@@ -92,10 +92,15 @@ export async function updateTorrentFilePreferenceSettings(request, response, nex
       return;
     }
 
-    const torrent = await updateTorrentFilePreferences(request.params.id, request.params.fileId, {
-      ...(typeof wanted === 'boolean' ? { wanted } : {}),
-      ...(priority !== undefined ? { priority: normaliseFilePriority(priority) } : {})
-    });
+    const torrent = await updateTorrentFilePreferences(
+      request.params.id,
+      request.params.fileId,
+      {
+        ...(typeof wanted === 'boolean' ? { wanted } : {}),
+        ...(priority !== undefined ? { priority: normaliseFilePriority(priority) } : {})
+      },
+      { user: request.user }
+    );
 
     response.json({ success: true, data: torrent });
   } catch (error) {
@@ -105,7 +110,7 @@ export async function updateTorrentFilePreferenceSettings(request, response, nex
 
 export async function removeTorrent(request, response, next) {
   try {
-    await deleteTorrent(request.params.id, toBoolean(request.query.deleteFiles));
+    await deleteTorrent(request.params.id, toBoolean(request.query.deleteFiles), { user: request.user });
     response.json({ success: true, data: { id: request.params.id } });
   } catch (error) {
     next(error);

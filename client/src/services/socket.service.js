@@ -5,7 +5,8 @@ let socket;
 export function getSocket() {
   if (!socket) {
     socket = io({
-      autoConnect: false
+      autoConnect: false,
+      withCredentials: true
     });
   }
 
@@ -14,20 +15,29 @@ export function getSocket() {
 
 export function connectSocket(handlers = {}) {
   const client = getSocket();
+  const emitConnected = () => {
+    client.emit('client:connected');
+  };
 
   Object.entries(handlers).forEach(([eventName, handler]) => {
     client.on(eventName, handler);
   });
+  client.on('connect', emitConnected);
 
   if (!client.connected) {
     client.connect();
   }
 
-  client.emit('client:connected');
-
   return () => {
     Object.entries(handlers).forEach(([eventName, handler]) => {
       client.off(eventName, handler);
     });
+    client.off('connect', emitConnected);
   };
+}
+
+export function disconnectSocket() {
+  if (socket) {
+    socket.disconnect();
+  }
 }

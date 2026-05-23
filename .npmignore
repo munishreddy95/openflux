@@ -5,6 +5,7 @@
 .git/
 .gitignore
 .npmignore
+.github/
 .agents/
 .codex/
 .npmrc
@@ -15,6 +16,8 @@ client/node_modules/
 
 # Development source and local-only project files
 client/
+scripts/
+dist/
 prompt.md
 
 # Editor, logs, and temporary files
@@ -29,9 +32,12 @@ yarn-error.log*
 pnpm-debug.log*
 *.swp
 *.swo
+.cache/
+.openflux/
+*.pid
+*.pid.lock
 tmp/
 temp/
 coverage/
 .nyc_output/
-dist/
 *.tgz

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Activity, Clock3, FolderArchive, Timer, Users } from 'lucide-react';
-import Loading from '../components/common/Loading.jsx';
+import { TorrentDetailsSkeleton } from '../components/skeletons/PageSkeletons.jsx';
 import PeerList from '../components/torrent/PeerList.jsx';
 import TorrentActions from '../components/torrent/TorrentActions.jsx';
 import TorrentProgress from '../components/torrent/TorrentProgress.jsx';
@@ -71,7 +71,7 @@ export default function TorrentDetails() {
   }, [id, storeTorrent, upsertTorrent]);
 
   if (loading && !torrent) {
-    return <Loading label="Loading torrent details..." />;
+    return <TorrentDetailsSkeleton />;
   }
 
   if (!torrent) {
@@ -106,7 +106,15 @@ export default function TorrentDetails() {
         </div>
 
         <div className="mt-8">
-          <TorrentProgress progress={torrent.progress} />
+          <TorrentProgress
+            progress={torrent.progress}
+            status={torrent.status}
+            downloadSpeed={torrent.downloadSpeed}
+            uploadSpeed={torrent.uploadSpeed}
+            connectedPeers={connectedPeers}
+            totalPeers={totalPeers}
+            showTransferSummary={false}
+          />
         </div>
 
         <div className="metric-grid mt-8 grid gap-4">

@@ -52,6 +52,14 @@ export const useTorrentStore = create((set, get) => ({
         state.torrents.map((torrent) => (torrent.id === id ? { ...torrent, ...partial } : torrent))
       )
     })),
+  reset: () => set({
+    torrents: [],
+    media: [],
+    loading: false,
+    mediaLoading: false,
+    error: null,
+    connectionStatus: 'disconnected'
+  }),
   getTorrentById: (id) => get().torrents.find((torrent) => torrent.id === id),
   getTorrentFiles: (id) => get().torrents.find((torrent) => torrent.id === id)?.files || []
 }));

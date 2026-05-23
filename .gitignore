@@ -3,6 +3,11 @@ node_modules/
 client/node_modules/
 .npmrc
 
+# Runtime state
+.openflux/
+*.pid
+*.pid.lock
+
 # Logs
 *.log
 npm-debug.log*
@@ -26,6 +31,7 @@ Thumbs.db
 # Local tooling
 .agents/
 .codex/
+.cache/
 
 # Build and coverage artifacts
 coverage/
@@ -33,6 +39,8 @@ coverage/
 dist/
 client/dist/
 client/.vite/
+client/.cache/
+client/.eslintcache
 *.tgz
 
 # Temporary files

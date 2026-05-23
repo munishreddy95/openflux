@@ -6,5 +6,10 @@ export const useSettingsStore = create((set) => ({
   error: null,
   setSettings: (settings) => set({ settings }),
   setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error })
+  setError: (error) => set({ error }),
+  reset: () => set({
+    settings: null,
+    loading: false,
+    error: null
+  })
 }));

@@ -86,3 +86,44 @@ a {
 .metric-grid {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
+
+.skeleton-block {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0.05) 0%,
+    rgb(255 255 255 / 0.09) 20%,
+    rgb(255 255 255 / 0.13) 50%,
+    rgb(255 255 255 / 0.09) 80%,
+    rgb(255 255 255 / 0.05) 100%
+  );
+}
+
+.skeleton-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.02) 20%,
+    rgb(255 255 255 / 0.22) 50%,
+    rgb(255 255 255 / 0.02) 80%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block::after {
+    animation: none;
+  }
+}

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, FileUp, Magnet } from 'lucide-react';
+import { AlertTriangle, FileUp, Magnet, UploadCloud, X } from 'lucide-react';
 import Button from '../components/common/Button.jsx';
 import Input from '../components/common/Input.jsx';
 import { addMagnet, addTorrentFile } from '../services/torrent.api.js';
@@ -10,10 +10,32 @@ import { getApiError } from '../services/api.service.js';
 export default function AddTorrent() {
   const navigate = useNavigate();
   const upsertTorrent = useTorrentStore((state) => state.upsertTorrent);
+  const fileInputRef = useRef(null);
   const [magnetURI, setMagnetURI] = useState('');
   const [uploadFile, setUploadFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+
+  function isTorrentFile(file) {
+    return Boolean(file?.name?.toLowerCase().endsWith('.torrent'));
+  }
+
+  function selectUploadFile(file) {
+    if (!file) {
+      setUploadFile(null);
+      return;
+    }
+
+    if (!isTorrentFile(file)) {
+      setError('Only .torrent files are supported');
+      setUploadFile(null);
+      return;
+    }
+
+    setError('');
+    setUploadFile(file);
+  }
 
   async function handleMagnetSubmit(event) {
     event.preventDefault();
@@ -50,6 +72,26 @@ export default function AddTorrent() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    setDragActive(true);
+  }
+
+  function handleDragLeave(event) {
+    event.preventDefault();
+    if (event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+
+    setDragActive(false);
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setDragActive(false);
+    selectUploadFile(event.dataTransfer.files?.[0] || null);
   }
 
   return (
@@ -90,16 +132,82 @@ export default function AddTorrent() {
         </div>
 
         <form className="mt-6 space-y-4" onSubmit={handleFileSubmit}>
-          <label className="block rounded-[24px] border border-dashed border-white/15 bg-white/4 p-6 text-center">
-            <input
-              type="file"
-              accept=".torrent"
-              onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
-              className="hidden"
-            />
-            <p className="text-sm text-white">{uploadFile ? uploadFile.name : 'Click to select a .torrent file'}</p>
-            <p className="mt-2 text-xs text-subtle">Maximum upload size: 2 MB</p>
-          </label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".torrent"
+            onChange={(event) => selectUploadFile(event.target.files?.[0] || null)}
+            className="hidden"
+          />
+
+          <div
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={[
+              'rounded-[28px] border border-dashed p-5 sm:p-6 transition',
+              dragActive
+                ? 'border-accent/70 bg-accent/10'
+                : 'border-white/15 bg-white/4 hover:border-white/25 hover:bg-white/6'
+            ].join(' ')}
+          >
+            <div className="flex flex-col items-center text-center">
+              <div
+                className={[
+                  'rounded-[22px] p-4 transition',
+                  dragActive ? 'bg-accent/15 text-accent' : 'bg-white/6 text-white'
+                ].join(' ')}
+              >
+                <UploadCloud className="h-7 w-7" />
+              </div>
+
+              <h4 className="mt-4 font-display text-xl font-semibold text-white">
+                {dragActive ? 'Drop your .torrent file here' : 'Drag and drop a .torrent file'}
+              </h4>
+              <p className="mt-2 max-w-md text-sm leading-6 text-subtle">
+                Upload a torrent file directly from your device or browse for one manually. OpenFlux stages it in the
+                upload folder before the download starts.
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <FileUp className="h-4 w-4" />
+                  Browse files
+                </Button>
+                <span className="text-xs uppercase tracking-[0.18em] text-subtle">.torrent only • max 2 MB</span>
+              </div>
+            </div>
+
+            {uploadFile ? (
+              <div className="mt-5 rounded-[22px] border border-white/10 bg-white/6 p-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.18em] text-subtle">Selected file</p>
+                    <p className="mt-1 break-words text-sm font-medium text-white">{uploadFile.name}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadFile(null);
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = '';
+                      }
+                    }}
+                    className="rounded-xl border border-white/10 bg-white/5 p-2 text-subtle transition hover:bg-white/10 hover:text-white"
+                    aria-label="Remove selected file"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           <Button type="submit" variant="secondary" disabled={busy || !uploadFile}>
             {busy ? 'Uploading...' : 'Upload torrent file'}
           </Button>

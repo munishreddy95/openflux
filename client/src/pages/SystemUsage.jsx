@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, Cpu, FolderArchive, HardDrive, RefreshCw, Server } from 'lucide-react';
 import Button from '../components/common/Button.jsx';
-import Loading from '../components/common/Loading.jsx';
+import { SystemUsageSkeleton } from '../components/skeletons/PageSkeletons.jsx';
 import { getApiError } from '../services/api.service.js';
 import { fetchSystemUsage } from '../services/system.api.js';
 import { formatBytes, formatDate, formatDuration, formatPercent } from '../utils/format.js';
@@ -101,7 +101,7 @@ export default function SystemUsage() {
   }, []);
 
   if (loading && !usage) {
-    return <Loading label="Loading system usage..." />;
+    return <SystemUsageSkeleton />;
   }
 
   if (!usage) {

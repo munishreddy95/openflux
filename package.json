@@ -1,6 +1,6 @@
 {
   "name": "openflux",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Self-hosted, always-on torrent manager for authorized downloads, streaming, and remote access",
   "type": "module",
   "bin": {
@@ -12,6 +12,14 @@
     "client:dev": "cd client && npm run dev",
     "client:build": "cd client && npm run build",
     "build": "npm run client:build",
+    "bundle:current": "node scripts/create-release-bundle.mjs",
+    "installer:windows": "node scripts/create-windows-installer.mjs",
+    "package:linux": "node scripts/create-linux-package.mjs",
+    "package:macos": "node scripts/create-macos-app.mjs",
+    "release:bundle": "npm run build && npm run bundle:current",
+    "release:linux": "npm run build && npm run bundle:current && npm run package:linux",
+    "release:macos": "npm run build && npm run bundle:current && npm run package:macos",
+    "release:windows": "npm run build && npm run bundle:current && npm run installer:windows",
     "start": "node server/server.js"
   },
   "files": [
@@ -19,6 +27,7 @@
     "server",
     "public",
     "README.md",
+    "PACKAGING.md",
     "CONTRIBUTING.md",
     "LEGAL_NOTICE.md",
     "SECURITY.md",

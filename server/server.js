@@ -11,6 +11,8 @@ import { proxySocketUpgradeToControl } from './services/proxy.service.js';
 import {
   getControlPort,
   getControlPortEnvKey,
+  getPublicPort,
+  getPublicPortEnvKey,
   getRuntimeRole,
   getRuntimeRoleEnvKey,
   initializeRuntimeSupervisor,
@@ -68,8 +70,18 @@ async function closeSocketServer(server) {
 
 async function listenServer(server, port, host) {
   await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, () => resolve());
+    const handleError = (error) => {
+      server.off('listening', handleListening);
+      reject(error);
+    };
+    const handleListening = () => {
+      server.off('error', handleError);
+      resolve();
+    };
+
+    server.once('error', handleError);
+    server.once('listening', handleListening);
+    server.listen(port, host);
   });
 }
 
@@ -79,6 +91,59 @@ async function reserveLoopbackPort() {
   const address = probeServer.address();
   await closeHttpServer(probeServer);
   return typeof address === 'object' && address ? address.port : null;
+}
+
+async function findAvailablePort(startPort, host, { maxAttempts = 50 } = {}) {
+  let candidatePort = Number(startPort);
+
+  if (!Number.isInteger(candidatePort) || candidatePort <= 0) {
+    throw new Error(`Invalid startup port: ${startPort}`);
+  }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const probeServer = http.createServer();
+
+    try {
+      await listenServer(probeServer, candidatePort, host);
+      const address = probeServer.address();
+      await closeHttpServer(probeServer);
+      return typeof address === 'object' && address ? address.port : candidatePort;
+    } catch (error) {
+      await closeHttpServer(probeServer).catch(() => {});
+
+      if (error?.code !== 'EADDRINUSE') {
+        throw error;
+      }
+
+      candidatePort += 1;
+    }
+  }
+
+  throw new Error(`Unable to find an available port starting from ${startPort}`);
+}
+
+function applyResolvedPort(config, port) {
+  const resolvedPort = Number(port);
+
+  if (!Number.isInteger(resolvedPort) || resolvedPort <= 0) {
+    return false;
+  }
+
+  const requestedPort = Number(config.port);
+  config.port = resolvedPort;
+  return resolvedPort !== requestedPort;
+}
+
+function logResolvedPortChange(config, requestedPort) {
+  if (requestedPort === config.port) {
+    return;
+  }
+
+  console.log(
+    chalk.yellow(
+      `Port ${requestedPort} is already in use. OpenFlux is using ${config.port} instead.`
+    )
+  );
 }
 
 async function shutdownWorkerRuntime() {
@@ -155,6 +220,10 @@ function logWorkerReady(role, config) {
 }
 
 async function startSingleProcessRuntime(config) {
+  const requestedPort = config.port;
+  const resolvedPort = await findAvailablePort(config.port, config.host);
+  applyResolvedPort(config, resolvedPort);
+
   await initializeDb(config.dbPath);
   initializeRuntimeTelemetry();
   await initializeTorrentService();
@@ -166,6 +235,7 @@ async function startSingleProcessRuntime(config) {
   await listenServer(httpServer, config.port, config.host);
   setupWorkerSignalHandlers();
 
+  logResolvedPortChange(config, requestedPort);
   console.log(chalk.green('OpenFlux is running'));
   console.log(chalk.cyan(`Dashboard: http://${config.host}:${config.port}`));
   console.log(chalk.gray(`Storage: ${config.storageDir}`));
@@ -177,6 +247,11 @@ async function startSingleProcessRuntime(config) {
 
 async function startControlWorkerRuntime(config) {
   const controlPort = getControlPort();
+  const assignedPublicPort = getPublicPort();
+
+  if (assignedPublicPort) {
+    config.port = assignedPublicPort;
+  }
 
   await initializeDb(config.dbPath);
   initializeRuntimeTelemetry();
@@ -216,6 +291,11 @@ async function startControlWorkerRuntime(config) {
 
 async function startWebWorkerRuntime(config) {
   const controlPort = getControlPort();
+  const assignedPublicPort = getPublicPort();
+
+  if (assignedPublicPort) {
+    config.port = assignedPublicPort;
+  }
 
   await initializeDb(config.dbPath);
   initializeRuntimeTelemetry();
@@ -242,10 +322,11 @@ async function startWebWorkerRuntime(config) {
   return { server: httpServer, config };
 }
 
-function forkRuntimeWorker(role, controlPort) {
+function forkRuntimeWorker(role, controlPort, publicPort) {
   const worker = cluster.fork({
     [getRuntimeRoleEnvKey()]: role,
-    [getControlPortEnvKey()]: String(controlPort)
+    [getControlPortEnvKey()]: String(controlPort),
+    [getPublicPortEnvKey()]: String(publicPort)
   });
 
   supervisorWorkerRoles.set(worker.id, role);
@@ -259,6 +340,9 @@ async function startMultiCoreSupervisor(config) {
   }
 
   supervisorStarted = true;
+  const requestedPort = config.port;
+  const resolvedPort = await findAvailablePort(config.port, config.host);
+  applyResolvedPort(config, resolvedPort);
   initializeRuntimeSupervisor(config);
 
   const controlPort = await reserveLoopbackPort();
@@ -266,10 +350,10 @@ async function startMultiCoreSupervisor(config) {
     exec: runtimeEntryPath
   });
 
-  forkRuntimeWorker(RUNTIME_ROLE.control, controlPort);
+  forkRuntimeWorker(RUNTIME_ROLE.control, controlPort, config.port);
 
   for (let workerIndex = 1; workerIndex < config.runtimeCoreCount; workerIndex += 1) {
-    forkRuntimeWorker(RUNTIME_ROLE.web, controlPort);
+    forkRuntimeWorker(RUNTIME_ROLE.web, controlPort, config.port);
   }
 
   cluster.on('exit', (worker, code, signal) => {
@@ -286,11 +370,12 @@ async function startMultiCoreSupervisor(config) {
       )
     );
 
-    forkRuntimeWorker(role, controlPort);
+    forkRuntimeWorker(role, controlPort, config.port);
   });
 
   setupSupervisorSignalHandlers();
 
+  logResolvedPortChange(config, requestedPort);
   console.log(chalk.green('OpenFlux multi-core runtime is running'));
   console.log(chalk.cyan(`Dashboard: http://${config.host}:${config.port}`));
   console.log(chalk.gray(`Storage: ${config.storageDir}`));

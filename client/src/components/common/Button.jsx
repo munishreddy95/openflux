@@ -7,6 +7,7 @@ const variants = {
   secondary: 'bg-white/8 text-ink hover:bg-white/12',
   ghost: 'bg-transparent text-subtle hover:bg-white/6 hover:text-white',
   danger: 'bg-danger/85 text-white hover:bg-danger',
+  warning: 'bg-warning/85 text-slate-950 hover:bg-warning',
   success: 'bg-accent/80 text-slate-950 hover:bg-accent'
 };
 

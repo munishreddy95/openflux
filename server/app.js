@@ -1,12 +1,15 @@
 import path from 'node:path';
 import fs from 'fs-extra';
 import express from 'express';
+import authRoutes from './routes/auth.routes.js';
 import torrentRoutes from './routes/torrent.routes.js';
 import mediaRoutes from './routes/media.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import healthRoutes from './routes/health.routes.js';
 import systemRoutes from './routes/system.routes.js';
+import userRoutes from './routes/user.routes.js';
 import { createControlHttpProxy } from './services/proxy.service.js';
+import { attachAuthSession, requireAdmin, requireAuth, requirePasswordChangeResolved } from './middleware/auth.middleware.js';
 import { errorMiddleware, notFoundMiddleware } from './middleware/error.middleware.js';
 
 const publicDirectory = path.resolve(process.cwd(), 'public');
@@ -18,6 +21,7 @@ export function createApp({ workerRole = 'control', controlPort = null } = {}) {
   const proxyToControl = isWebWorker && controlPort ? createControlHttpProxy(controlPort) : null;
 
   app.disable('x-powered-by');
+  app.set('trust proxy', true);
 
   if (proxyToControl) {
     app.use('/socket.io', proxyToControl);
@@ -40,15 +44,17 @@ export function createApp({ workerRole = 'control', controlPort = null } = {}) {
 
   app.use(express.json({ limit: '2mb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use('/api', attachAuthSession);
 
   // Placeholder: add rate limiting middleware before exposing OpenFlux publicly.
-  // Placeholder: add authentication middleware before exposing OpenFlux publicly.
 
   app.use('/api/health', healthRoutes);
-  app.use('/api/settings', settingsRoutes);
-  app.use('/api/system', systemRoutes);
-  app.use('/api/torrents', torrentRoutes);
-  app.use('/api/media', mediaRoutes);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/users', requireAuth, requireAdmin, userRoutes);
+  app.use('/api/settings', requireAuth, requireAdmin, settingsRoutes);
+  app.use('/api/system', requireAuth, requireAdmin, systemRoutes);
+  app.use('/api/torrents', requireAuth, requirePasswordChangeResolved, torrentRoutes);
+  app.use('/api/media', requireAuth, requirePasswordChangeResolved, mediaRoutes);
 
   app.use(express.static(publicDirectory));
 
