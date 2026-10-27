@@ -98,8 +98,8 @@ export default function TorrentDetails() {
             <h3 className="mt-4 break-words font-display text-3xl font-semibold text-white">{torrent.name}</h3>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-subtle">
               {torrent.sourceType === 'magnet'
-                ? 'Magnet metadata is stored so this torrent can be resumed manually after restarts.'
-                : 'Uploaded torrent file is stored safely inside the OpenFlux upload directory for manual resume.'}
+                ? 'Magnet metadata is stored so this torrent can recover automatically after restarts.'
+                : 'Uploaded torrent files are stored safely so OpenFlux can recover this download automatically after restarts.'}
             </p>
           </div>
           <TorrentActions torrent={torrent} />

@@ -413,10 +413,35 @@ async function persistTorrents(mutator) {
   return result;
 }
 
+function getLiveRecordSnapshot(record) {
+  if (!record?.id) {
+    return decorateTorrentRecord(record);
+  }
+
+  const activeRecord = activeTorrents.get(record.id);
+  if (!activeRecord?.torrent) {
+    return decorateTorrentRecord(record);
+  }
+
+  const baseStatus = record.status === 'checking' ? 'checking' : 'downloading';
+  const files = mapFilesFromTorrent(record, activeRecord.torrent);
+
+  return decorateTorrentRecord({
+    ...record,
+    ...buildManagedTorrentRecordData({
+      record,
+      torrent: activeRecord.torrent,
+      files,
+      baseStatus,
+      active: true
+    })
+  });
+}
+
 async function readTorrentRecord(id) {
   const database = getDb();
   await database.read();
-  return decorateTorrentRecord(
+  return getLiveRecordSnapshot(
     database.data.torrents.find((torrent) => torrent.id === id) || null
   );
 }
@@ -812,7 +837,7 @@ export async function listTorrents({ user } = {}) {
   return database.data.torrents
     .slice()
     .filter((torrent) => !user || canAccessTorrentRecord(torrent, user))
-    .map((torrent) => decorateTorrentRecord(torrent))
+    .map((torrent) => getLiveRecordSnapshot(torrent))
     .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }
 

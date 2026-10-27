@@ -19,6 +19,7 @@ import {
   initializeRuntimeTelemetry,
   isControlRuntime,
   isMultiCoreRuntimeConfigured,
+  isMultiCoreRuntimeSupported,
   isMultiCoreRuntimeEnabled,
   isWebRuntime,
   registerSupervisorWorker,
@@ -225,7 +226,7 @@ async function startSingleProcessRuntime(config) {
   applyResolvedPort(config, resolvedPort);
 
   await initializeDb(config.dbPath);
-  initializeRuntimeTelemetry();
+  initializeRuntimeTelemetry(config);
   await initializeTorrentService();
 
   const app = createApp({ workerRole: RUNTIME_ROLE.single });
@@ -254,7 +255,7 @@ async function startControlWorkerRuntime(config) {
   }
 
   await initializeDb(config.dbPath);
-  initializeRuntimeTelemetry();
+  initializeRuntimeTelemetry(config);
   await initializeTorrentService();
 
   const internalApp = createApp({
@@ -298,7 +299,7 @@ async function startWebWorkerRuntime(config) {
   }
 
   await initializeDb(config.dbPath);
-  initializeRuntimeTelemetry();
+  initializeRuntimeTelemetry(config);
 
   const app = createApp({
     workerRole: RUNTIME_ROLE.web,
@@ -398,10 +399,21 @@ export async function startServer(options = {}) {
   const config = await initializeConfig(options, {
     persist: !cluster.isWorker
   });
+  const multiCoreConfigured = isMultiCoreRuntimeConfigured(config);
+  const multiCoreSupported = isMultiCoreRuntimeSupported();
 
-  if (cluster.isPrimary && isMultiCoreRuntimeConfigured(config)) {
+  if (cluster.isPrimary && multiCoreConfigured && multiCoreSupported) {
     await initializeDb(config.dbPath);
     return startMultiCoreSupervisor(config);
+  }
+
+  if (cluster.isPrimary && multiCoreConfigured && !multiCoreSupported) {
+    console.log(
+      chalk.yellow(
+        `OpenFlux multi-core runtime is disabled on Node.js ${process.versions.node} due to cluster instability. ` +
+        'Falling back to single-process mode.'
+      )
+    );
   }
 
   if (isWebRuntime()) {

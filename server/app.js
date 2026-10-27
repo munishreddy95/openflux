@@ -33,6 +33,13 @@ export function createApp({ workerRole = 'control', controlPort = null } = {}) {
         return;
       }
 
+      // Torrent state is owned by the control worker, so web workers forward
+      // torrent reads and mutations there to avoid serving stale runtime data.
+      if (request.path.startsWith('/torrents')) {
+        proxyToControl(request, response, next);
+        return;
+      }
+
       if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
         proxyToControl(request, response, next);
         return;

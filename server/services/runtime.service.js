@@ -1,6 +1,8 @@
 import cluster from 'node:cluster';
 import os from 'node:os';
+import path from 'node:path';
 import process from 'node:process';
+import fs from 'fs-extra';
 
 export const RUNTIME_ROLE = {
   single: 'single',
@@ -12,23 +14,19 @@ const ROLE_ENV_KEY = 'OPENFLUX_RUNTIME_ROLE';
 const CONTROL_PORT_ENV_KEY = 'OPENFLUX_CONTROL_PORT';
 const PUBLIC_PORT_ENV_KEY = 'OPENFLUX_PUBLIC_PORT';
 const REPORT_INTERVAL_MS = 1000;
-const SNAPSHOT_TIMEOUT_MS = 2000;
-const SUPERVISOR_MESSAGE = {
-  workerStats: 'runtime:worker-stats',
-  snapshotRequest: 'runtime:snapshot-request',
-  snapshotResponse: 'runtime:snapshot-response'
-};
+const WORKER_REGISTRY_FILENAME = 'openflux.runtime.workers.json';
+const WORKER_STATS_DIRECTORY = 'openflux.runtime.workers';
 
 let reportIntervalId = null;
-let localStatsMessageListenerRegistered = false;
 let lastProcessCpuUsage = process.cpuUsage();
 let lastSampleTime = process.hrtime.bigint();
-let snapshotRequestSequence = 0;
+let runtimeStorageDir = null;
 let supervisorConfig = null;
+let localStatsWriteQueue = Promise.resolve();
+let supervisorRegistryWriteQueue = Promise.resolve();
+let workerStatsCleanupRegistered = false;
 
 const supervisorWorkerMeta = new Map();
-const supervisorWorkerStats = new Map();
-const pendingRuntimeSnapshots = new Map();
 
 let latestLocalRuntimeStats = {
   pid: process.pid,
@@ -78,6 +76,16 @@ export function isMultiCoreRuntimeConfigured(config = null) {
   return runtimeCoreCount > 1;
 }
 
+export function isMultiCoreRuntimeSupported() {
+  const majorVersion = Number.parseInt(String(process.versions?.node || '').split('.')[0] || '', 10);
+
+  if (!Number.isInteger(majorVersion)) {
+    return true;
+  }
+
+  return majorVersion !== 24;
+}
+
 export function isMultiCoreRuntimeEnabled(_config = null) {
   return getRuntimeRole() !== RUNTIME_ROLE.single;
 }
@@ -98,6 +106,25 @@ function roundUsage(value, max = 999.9) {
   }
 
   return Number(Math.min(max, value).toFixed(1));
+}
+
+function getStorageDir(config = supervisorConfig) {
+  return config?.storageDir || runtimeStorageDir || null;
+}
+
+function getWorkerStatsDirectory(config = supervisorConfig) {
+  const storageDir = getStorageDir(config);
+  return storageDir ? path.join(storageDir, WORKER_STATS_DIRECTORY) : null;
+}
+
+function getWorkerStatsPath(pid = process.pid, config = supervisorConfig) {
+  const statsDirectory = getWorkerStatsDirectory(config);
+  return statsDirectory ? path.join(statsDirectory, `${pid}.json`) : null;
+}
+
+function getWorkerRegistryPath(config = supervisorConfig) {
+  const storageDir = getStorageDir(config);
+  return storageDir ? path.join(storageDir, WORKER_REGISTRY_FILENAME) : null;
 }
 
 function sampleLocalRuntimeStats() {
@@ -124,48 +151,62 @@ function sampleLocalRuntimeStats() {
   return latestLocalRuntimeStats;
 }
 
-function sendWorkerStatsToSupervisor() {
-  if (!cluster.isWorker || typeof process.send !== 'function') {
+function queueLocalRuntimeStatsWrite() {
+  const statsPath = getWorkerStatsPath(process.pid);
+  if (!statsPath) {
     return;
   }
 
-  process.send({
-    type: SUPERVISOR_MESSAGE.workerStats,
-    payload: latestLocalRuntimeStats
-  });
+  const nextStats = {
+    ...latestLocalRuntimeStats,
+    pid: process.pid,
+    role: getRuntimeRole()
+  };
+
+  localStatsWriteQueue = localStatsWriteQueue
+    .catch(() => {})
+    .then(() => fs.outputJson(statsPath, nextStats, { spaces: 2 }))
+    .catch(() => {});
 }
 
-function handleWorkerRuntimeMessage(message = {}) {
-  if (message.type !== SUPERVISOR_MESSAGE.snapshotResponse) {
+function registerWorkerStatsCleanup() {
+  if (workerStatsCleanupRegistered) {
     return;
   }
 
-  const pendingRequest = pendingRuntimeSnapshots.get(message.requestId);
-  if (!pendingRequest) {
-    return;
-  }
+  const cleanup = () => {
+    const statsPath = getWorkerStatsPath(process.pid);
+    if (!statsPath) {
+      return;
+    }
 
-  clearTimeout(pendingRequest.timeoutId);
-  pendingRuntimeSnapshots.delete(message.requestId);
-  pendingRequest.resolve(message.payload);
+    try {
+      fs.removeSync(statsPath);
+    } catch {
+      // Ignore cleanup failures during worker shutdown.
+    }
+  };
+
+  process.once('exit', cleanup);
+  workerStatsCleanupRegistered = true;
 }
 
-export function initializeRuntimeTelemetry() {
+export function initializeRuntimeTelemetry(config = null) {
+  if (config?.storageDir) {
+    runtimeStorageDir = config.storageDir;
+  }
+
   if (reportIntervalId) {
     return;
   }
 
   sampleLocalRuntimeStats();
-  sendWorkerStatsToSupervisor();
-
-  if (cluster.isWorker && typeof process.send === 'function' && !localStatsMessageListenerRegistered) {
-    process.on('message', handleWorkerRuntimeMessage);
-    localStatsMessageListenerRegistered = true;
-  }
+  queueLocalRuntimeStatsWrite();
+  registerWorkerStatsCleanup();
 
   reportIntervalId = setInterval(() => {
     sampleLocalRuntimeStats();
-    sendWorkerStatsToSupervisor();
+    queueLocalRuntimeStatsWrite();
   }, REPORT_INTERVAL_MS);
 
   reportIntervalId.unref?.();
@@ -175,8 +216,33 @@ export function getLocalRuntimeStats() {
   return latestLocalRuntimeStats;
 }
 
+function queueSupervisorWorkerRegistryWrite() {
+  const registryPath = getWorkerRegistryPath();
+  if (!registryPath) {
+    return;
+  }
+
+  const workers = Array.from(supervisorWorkerMeta.values()).map((workerMeta) => ({
+    workerId: workerMeta.workerId,
+    role: workerMeta.role,
+    pid: workerMeta.pid
+  }));
+
+  const nextRegistry = {
+    updatedAt: new Date().toISOString(),
+    workers
+  };
+
+  supervisorRegistryWriteQueue = supervisorRegistryWriteQueue
+    .catch(() => {})
+    .then(() => fs.outputJson(registryPath, nextRegistry, { spaces: 2 }))
+    .catch(() => {});
+}
+
 export function initializeRuntimeSupervisor(config) {
   supervisorConfig = config;
+  runtimeStorageDir = config?.storageDir || runtimeStorageDir;
+  queueSupervisorWorkerRegistryWrite();
 }
 
 export function registerSupervisorWorker(worker, { role }) {
@@ -185,29 +251,11 @@ export function registerSupervisorWorker(worker, { role }) {
     role,
     pid: worker.process?.pid || null
   });
-
-  worker.on('message', (message = {}) => {
-    if (message.type === SUPERVISOR_MESSAGE.workerStats) {
-      supervisorWorkerStats.set(worker.id, {
-        ...message.payload,
-        workerId: worker.id,
-        role
-      });
-      return;
-    }
-
-    if (message.type === SUPERVISOR_MESSAGE.snapshotRequest) {
-      worker.send({
-        type: SUPERVISOR_MESSAGE.snapshotResponse,
-        requestId: message.requestId,
-        payload: buildSupervisorRuntimeSnapshot()
-      });
-    }
-  });
+  queueSupervisorWorkerRegistryWrite();
 
   worker.on('exit', () => {
     supervisorWorkerMeta.delete(worker.id);
-    supervisorWorkerStats.delete(worker.id);
+    queueSupervisorWorkerRegistryWrite();
   });
 }
 
@@ -250,53 +298,66 @@ function buildSingleProcessRuntimeSnapshot(config) {
   return buildRuntimeSummaryFromWorkers([
     {
       ...getLocalRuntimeStats(),
+      pid: process.pid,
       role: getRuntimeRole()
     }
   ], config);
 }
 
-function buildSupervisorRuntimeSnapshot() {
-  const workers = Array.from(supervisorWorkerMeta.values()).map((workerMeta) => {
-    const latestStats = supervisorWorkerStats.get(workerMeta.workerId);
-    return {
-      pid: latestStats?.pid || workerMeta.pid || null,
-      role: workerMeta.role,
-      workerId: workerMeta.workerId,
-      cpuPercent: latestStats?.cpuPercent || 0,
-      memoryBytes: latestStats?.memoryBytes || 0,
-      heapUsedBytes: latestStats?.heapUsedBytes || 0,
-      heapTotalBytes: latestStats?.heapTotalBytes || 0,
-      externalBytes: latestStats?.externalBytes || 0,
-      arrayBuffersBytes: latestStats?.arrayBuffersBytes || 0,
-      uptimeSeconds: latestStats?.uptimeSeconds || 0,
-      sampledAt: latestStats?.sampledAt || null
-    };
-  });
+async function readWorkerRuntimeStats(workerMeta, config) {
+  const statsPath = getWorkerStatsPath(workerMeta.pid, config);
+  let workerStats = null;
 
-  return buildRuntimeSummaryFromWorkers(workers, supervisorConfig);
+  if (statsPath) {
+    try {
+      workerStats = await fs.readJson(statsPath);
+    } catch {
+      workerStats = null;
+    }
+  }
+
+  return {
+    pid: workerStats?.pid || workerMeta.pid || null,
+    role: workerStats?.role || workerMeta.role,
+    workerId: workerMeta.workerId,
+    cpuPercent: workerStats?.cpuPercent || 0,
+    memoryBytes: workerStats?.memoryBytes || 0,
+    heapUsedBytes: workerStats?.heapUsedBytes || 0,
+    heapTotalBytes: workerStats?.heapTotalBytes || 0,
+    externalBytes: workerStats?.externalBytes || 0,
+    arrayBuffersBytes: workerStats?.arrayBuffersBytes || 0,
+    uptimeSeconds: workerStats?.uptimeSeconds || 0,
+    sampledAt: workerStats?.sampledAt || null
+  };
 }
 
 export async function requestRuntimeSnapshot(config) {
-  if (!cluster.isWorker || typeof process.send !== 'function' || !isMultiCoreRuntimeEnabled(config)) {
+  if (!isMultiCoreRuntimeEnabled(config)) {
     return buildSingleProcessRuntimeSnapshot(config);
   }
 
-  const requestId = `${process.pid}:${Date.now()}:${snapshotRequestSequence++}`;
+  const registryPath = getWorkerRegistryPath(config);
+  if (!registryPath) {
+    return buildSingleProcessRuntimeSnapshot(config);
+  }
 
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      pendingRuntimeSnapshots.delete(requestId);
-      resolve(buildSingleProcessRuntimeSnapshot(config));
-    }, SNAPSHOT_TIMEOUT_MS);
+  try {
+    if (!await fs.pathExists(registryPath)) {
+      return buildSingleProcessRuntimeSnapshot(config);
+    }
 
-    pendingRuntimeSnapshots.set(requestId, {
-      resolve,
-      timeoutId
-    });
+    const registry = await fs.readJson(registryPath);
+    const workersMeta = Array.isArray(registry?.workers) ? registry.workers : [];
+    if (workersMeta.length === 0) {
+      return buildSingleProcessRuntimeSnapshot(config);
+    }
 
-    process.send({
-      type: SUPERVISOR_MESSAGE.snapshotRequest,
-      requestId
-    });
-  });
+    const workers = await Promise.all(
+      workersMeta.map((workerMeta) => readWorkerRuntimeStats(workerMeta, config))
+    );
+
+    return buildRuntimeSummaryFromWorkers(workers, config);
+  } catch {
+    return buildSingleProcessRuntimeSnapshot(config);
+  }
 }
